@@ -9,3 +9,4 @@ frontend/.vite/
 frontend/.env.local
 data/
 models/*.pt
+AGENTS.md
