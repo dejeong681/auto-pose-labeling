@@ -1,37 +1,30 @@
-"""이미지 업로드 → 포즈 자동 라벨링 → 수동 편집 → TXT 저장/JSON 다운로드.
+"""이미지 업로드 → 포즈 자동 라벨링 → 관절 표시.
 
 설치: python -m pip install -r requirements.txt
 실행: python -m uvicorn app:app --reload
-화면 개발: frontend 폴더에서 npm install 후 npm run dev (http://127.0.0.1:5173)
-빌드 화면: frontend 폴더에서 npm run build 후 http://127.0.0.1:8000
+접속: http://127.0.0.1:8000
 """
 
 from functools import lru_cache
 from io import BytesIO
-import json
 import logging
 from math import isfinite
 from pathlib import Path, PureWindowsPath
 from threading import Lock
-from tempfile import NamedTemporaryFile
 from urllib.parse import quote
 
 from fastapi import FastAPI, HTTPException, UploadFile
-from fastapi.responses import FileResponse, JSONResponse, Response
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from PIL import Image, ImageOps, UnidentifiedImageError
-from pydantic import ValidationError
-
-from pose_labels import PoseLabels, from_yolo_txt, normalized_labels, to_yolo_txt
 
 BASE_DIR = Path(__file__).resolve().parent
-FRONTEND_DIST = BASE_DIR / "frontend" / "dist"
+STATIC_DIR = BASE_DIR / "static"
 IMAGE_DIR = BASE_DIR / "data" / "images"
-LABEL_DIR = BASE_DIR / "data" / "labels"
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024  # 한 장당 10MB
 IMAGE_FORMATS = {"JPEG": (".jpg", ".jpeg"), "PNG": (".png",), "WEBP": (".webp",), "BMP": (".bmp",)}
 IMAGE_EXTENSIONS = {suffix for suffixes in IMAGE_FORMATS.values() for suffix in suffixes}
-MODEL_PATH = BASE_DIR / "models" / "yolo11s-pose.pt"
+MODEL_PATH = BASE_DIR / "models" / "yolo11n-pose.pt"
 DET_CONF = 0.25
 KP_CONF = 0.5  # 관절 표시 기준인 임시값입니다. 실제 결과로 조정하세요.
 IMGSZ = 640
@@ -43,8 +36,7 @@ POSE_LOCK = Lock()  # 한 모델에 여러 추론 요청이 동시에 들어가�
 
 IMAGE_DIR.mkdir(parents=True, exist_ok=True)
 app = FastAPI(title="Auto Pose Labeling")
-# 빌드하기 전에도 API 서버를 실행할 수 있도록 check_dir=False로 둡니다.
-app.mount("/assets", StaticFiles(directory=FRONTEND_DIST / "assets", check_dir=False), name="assets")
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 app.mount("/images", StaticFiles(directory=IMAGE_DIR), name="images")
 
 
@@ -67,11 +59,7 @@ def validate_filename(filename: str | None) -> str:
 
 @app.get("/")
 def home():
-    """Vite가 빌드한 React 화면을 제공합니다. 개발 중에는 5173 포트로 접속합니다."""
-    path = FRONTEND_DIST / "index.html"
-    if not path.is_file():
-        raise HTTPException(503, "React 화면이 빌드되지 않았습니다. frontend에서 npm run build를 실행하거나 개발 서버(5173)에 접속하세요.")
-    return FileResponse(path)
+    return FileResponse(STATIC_DIR / "index.html")
 
 
 @app.get("/api/images")
@@ -129,11 +117,6 @@ def load_pose_model(model_path: str):
         from ultralytics import YOLO
     except ImportError:
         raise HTTPException(503, "포즈 추론 패키지를 설치하세요. requirements.txt를 확인하세요.")
-    except OSError as error:
-        if getattr(error, "winerror", None) == 4551:
-            logging.exception("Windows 정책으로 PyTorch 실행이 차단되었습니다.")
-            raise HTTPException(503, "Windows 애플리케이션 제어 정책이 PyTorch 실행을 차단했습니다.")
-        raise
     model = YOLO(model_path)
     if model.task != "pose":
         raise HTTPException(400, "COCO 17관절 포즈 모델을 지정하세요.")
@@ -190,72 +173,3 @@ def estimate_pose(filename: str):
     except Exception:
         logging.exception("포즈 추론 실패: %s", filename)
         raise HTTPException(500, "포즈 추론에 실패했습니다. 서버 터미널을 확인하세요.")
-
-
-def label_path_for(filename: str) -> Path:
-    """YOLO 학습 형식에 맞춰 사진.jpg의 라벨을 사진.txt로 저장합니다."""
-    filename = validate_filename(filename)
-    if not (IMAGE_DIR / filename).is_file():
-        raise HTTPException(404, "이미지 파일이 없습니다.")
-    stem = Path(filename).stem
-    # 확장자만 다른 같은 이름의 이미지가 한 TXT를 공유하지 않게 막습니다.
-    for suffix in IMAGE_EXTENSIONS:
-        other = IMAGE_DIR / (stem + suffix)
-        if other.name.casefold() != filename.casefold() and other.is_file():
-            raise HTTPException(409, "확장자만 다른 같은 이름의 이미지가 있어 TXT 라벨을 구분할 수 없습니다. 이미지 이름을 구분해 주세요.")
-    return LABEL_DIR / (stem + ".txt")
-
-
-@app.get("/api/images/{filename}/labels")
-def get_labels(filename: str):
-    path = label_path_for(filename)
-    legacy_path = LABEL_DIR / (filename + ".json")
-    try:
-        if path.is_file():
-            labels = from_yolo_txt(path.read_text(encoding="utf-8-sig"))
-            needs_save = False
-        elif legacy_path.is_file():
-            # 이전 JSON은 읽기만 합니다. 저장을 누르면 TXT를 새로 만들며 JSON은 보존합니다.
-            document = json.loads(legacy_path.read_text(encoding="utf-8"))
-            if document["filename"] != filename or document["schema_version"] != 1:
-                raise ValueError("이미지 또는 라벨 형식이 다릅니다.")
-            labels = PoseLabels.model_validate(document)
-            needs_save = True
-        else:
-            return {"filename": filename, "exists": False, "needs_save": False, "people": []}
-    except (OSError, ValueError, KeyError, TypeError, ValidationError):
-        raise HTTPException(500, "저장된 라벨을 읽지 못했습니다. 라벨 파일을 확인하세요.")
-    return {"filename": filename, "exists": True, "needs_save": needs_save, **normalized_labels(labels)}
-
-
-@app.put("/api/images/{filename}/labels")
-def save_labels(filename: str, labels: PoseLabels):
-    path = label_path_for(filename)
-    data = normalized_labels(labels)
-    text = to_yolo_txt(labels)
-    LABEL_DIR.mkdir(parents=True, exist_ok=True)
-    temporary = None
-    try:
-        # 다 쓴 뒤 교체하여 저장 도중 종료되어도 기존 파일이 반쪽으로 남지 않게 합니다.
-        with NamedTemporaryFile(mode="w", encoding="utf-8", dir=LABEL_DIR, suffix=".tmp", delete=False) as output:
-            temporary = Path(output.name)
-            output.write(text)
-        temporary.replace(path)
-    except OSError:
-        logging.exception("라벨 저장 실패: %s", filename)
-        raise HTTPException(500, "라벨을 저장하지 못했습니다.")
-    finally:
-        if temporary is not None and temporary.exists():
-            temporary.unlink()
-    return {"filename": filename, "exists": True, "needs_save": False, **data}
-
-
-@app.post("/api/images/{filename}/labels/export")
-def export_labels(filename: str, labels: PoseLabels):
-    filename = validate_filename(filename)
-    if not (IMAGE_DIR / filename).is_file():
-        raise HTTPException(404, "이미지 파일이 없습니다.")
-    document = {"schema_version": 1, "filename": filename, **normalized_labels(labels)}
-    download_name = quote(Path(filename).stem + ".json", safe="")
-    return Response(json.dumps(document, ensure_ascii=False, allow_nan=False, indent=2), media_type="application/json",
-                    headers={"Content-Disposition": f"attachment; filename*=UTF-8''{download_name}"})
