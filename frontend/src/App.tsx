@@ -62,7 +62,7 @@ export default function App() {
         <button id="upload-button" type="submit" disabled={uploading}>업로드</button>
         <span>한 장당 10MB까지</span>
         {/* 기존 버튼은 남겨 두며, 아직 없는 일괄 실행 기능은 연결하지 않습니다. */}
-        <button type="button" disabled>전체 자동라벨링</button>
+        <button disabled>전체 자동라벨링</button>
       </form>
       <p id="status" role="status" aria-live="polite" className={status.error ? 'error' : ''}>{status.message}</p>
       <ImageList images={images} activeFilename={activeFilename} onSelect={openImage} />
