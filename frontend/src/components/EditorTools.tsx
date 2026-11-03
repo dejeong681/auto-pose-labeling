@@ -1,3 +1,4 @@
+//브랜치 수정확인작업222
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { JOINT_NAMES, PoseEditor } from '../pose-editor';
 import type { EditorSnapshot } from '../types';
