@@ -25,6 +25,7 @@ export default function EditorModal({ image, imageIndex, imageCount, onNavigate,
   const [busy, setBusy] = useState<Busy>('load');
   const [savedPeople, setSavedPeople] = useState('[]');
   const [hasSavedTxt, setHasSavedTxt] = useState(false);
+  const [labelLoadFailed, setLabelLoadFailed] = useState(false);
   const [classValid, setClassValid] = useState(true);
   const [status, setStatus] = useState({ message: '', error: false });
   const [snapshot, setSnapshot] = useState<EditorSnapshot>({
@@ -42,6 +43,7 @@ export default function EditorModal({ image, imageIndex, imageCount, onNavigate,
   function acceptSaved(data: SavedLabels, preserveSelection = false) {
     // 이전 JSON만 있는 경우에는 수정하지 않아도 TXT 저장 버튼을 누를 수 있습니다.
     setHasSavedTxt(data.exists && !data.needs_save);
+    setLabelLoadFailed(false);
     setSavedPeople(JSON.stringify(data.people));
     editorRef.current?.setPeople(data.people, preserveSelection);
   }
@@ -66,19 +68,31 @@ export default function EditorModal({ image, imageIndex, imageCount, onNavigate,
       source.onerror = () => reject(new Error('이미지를 불러오지 못했습니다.'));
       source.src = image.url;
     });
-    Promise.all([imageReady, api.getLabels(image.filename, abort.signal)]).then(([loaded, data]) => {
+    // 각각의 성공·실패를 받아 라벨 오류가 이미지 표시까지 막지 않게 합니다.
+    Promise.allSettled([imageReady, api.getLabels(image.filename, abort.signal)]).then(([imageResult, labelResult]) => {
       if (disposed) return;
+      if (imageResult.status === 'rejected') throw imageResult.reason;
+      const loaded = imageResult.value;
+      const data = labelResult.status === 'fulfilled' ? labelResult.value : null;
+      const people = data?.people ?? [];
       editor.setImage(loaded);
       setImageSize({ width: loaded.naturalWidth, height: loaded.naturalHeight });
-      setSavedPeople(JSON.stringify(data.people));
-      setHasSavedTxt(data.exists && !data.needs_save);
-      editor.setPeople(data.people);
+      setSavedPeople(JSON.stringify(people));
+      setHasSavedTxt(Boolean(data?.exists && !data.needs_save));
+      setLabelLoadFailed(labelResult.status === 'rejected');
+      editor.setPeople(people);
       readyRef.current = true;
       setReady(true);
       busyRef.current = '';
       setBusy('');
       editor.setDisabled(false);
-      setStatus({ message: data.exists ? '저장된 라벨을 불러왔습니다.' : '자동 라벨링을 실행하거나 사람 박스를 추가하세요.', error: false });
+      if (labelResult.status === 'rejected') {
+        const error = labelResult.reason;
+        // 하단에는 기존과 동일한 오류 메시지를 그대로 표시합니다.
+        setStatus({ message: error instanceof Error ? error.message : '불러오기에 실패했습니다.', error: true });
+      } else {
+        setStatus({ message: data?.exists ? '저장된 라벨을 불러왔습니다.' : '자동 라벨링을 실행하거나 사람 박스를 추가하세요.', error: false });
+      }
     }).catch((error: Error) => {
       if (disposed) return;
       busyRef.current = '';
@@ -126,7 +140,8 @@ export default function EditorModal({ image, imageIndex, imageCount, onNavigate,
     return true;
   }
   async function save() {
-    if (!canRun(true)) return;
+    // 읽지 못한 기존 파일을 빈 내용으로 덮어쓰지 않게 버튼과 Ctrl+S 모두에서 막습니다.
+    if (!canRun(true) || (labelLoadFailed && !dirty)) return;
     setAction('save');
     try {
       const data = await api.saveLabels(image.filename, editorRef.current!.getPeople());
@@ -233,7 +248,7 @@ export default function EditorModal({ image, imageIndex, imageCount, onNavigate,
         </div>
         <div className="editor-actions">
           <button id="pose-button" type="button" disabled={disabled} onClick={() => void estimate()}>{busy === 'pose' ? '분석 중…' : '자동 라벨링'}</button>
-          <button id="save-labels" type="button" disabled={disabled || (hasSavedTxt && !dirty)} onClick={() => void save()}>
+          <button id="save-labels" type="button" disabled={disabled || ((hasSavedTxt || labelLoadFailed) && !dirty)} onClick={() => void save()}>
             {busy === 'save' ? '저장 중…' : dirty ? '저장 *' : '저장'}
           </button>
           <button id="reload-labels" type="button" disabled={disabled} onClick={() => void reload()}>다시 불러오기</button>
