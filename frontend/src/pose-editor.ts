@@ -183,6 +183,14 @@ export class PoseEditor {
     this.refresh();
   }
 
+  moveJoint(direction: -1 | 1) {
+    if (this.disabled || this.drag || this.mode !== 'point' || !this.person) return;
+    // 선택이 없으면 코(0)부터 시작하며, 양 끝에서는 순환하지 않습니다.
+    const next = this.selectedJoint < 0 ? 0 :
+      Math.max(0, Math.min(JOINT_NAMES.length - 1, this.selectedJoint + direction));
+    this.selectJoint(next);
+  }
+
   deselectJoint() {
     if (this.selectedJoint === -1 && this.mode === 'point' && !this.drag) return;
     this.cancelGesture();
@@ -336,7 +344,10 @@ export class PoseEditor {
         this.mode = 'point';
       }
     } else if (drag.kind === 'point') changed = JSON.stringify(drag.before) !== JSON.stringify(this.point);
+    const placedNewJoint = drag.kind === 'point' && drag.before.v === 0 && changed;
     this.releasePointer();
+    // 드래그가 끝난 뒤 선택을 바꿔야 이동 중인 점 대신 다음 관절이 수정되지 않습니다.
+    if (placedNewJoint) this.selectedJoint = Math.min(this.selectedJoint + 1, JOINT_NAMES.length - 1);
     this.refresh(changed);
   }
 

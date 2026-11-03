@@ -73,6 +73,6 @@ export default function EditorTools({ editor, snapshot, disabled, onError, onCla
       </select>
       <button id="clear-joint"  disabled={!person || snapshot.selectedJoint < 0} onClick={() => editor?.clearJoint()}>선택 관절 미지정 (0)</button>
     </fieldset>
-    <p className="edit-help">점은 드래그로 이동합니다. 미지정 관절은 목록에서 선택한 뒤 이미지에 찍으세요. 빈 곳 클릭: 선택 해제 · Ctrl+휠: 확대/축소 · 저장: Ctrl+S · 이전/다음: ← / →</p>
+    <p className="edit-help">점은 드래그로 이동합니다. 미지정 관절을 찍으면 다음 관절이 선택됩니다. 관절 선택: ↑ / ↓ · 빈 곳 클릭: 선택 해제 · Ctrl+휠: 확대/축소 · 저장: Ctrl+S · 이전/다음 이미지: ← / →</p>
   </aside>;
 }

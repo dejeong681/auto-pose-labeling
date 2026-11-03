@@ -181,12 +181,17 @@ export default function EditorModal({ image, imageIndex, imageCount, onNavigate,
         return;
       }
       if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return;
-      if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
-      // 입력칸·관절 목록에서는 기본 방향키 동작을 유지합니다.
+      const jointArrow = event.key === 'ArrowUp' || event.key === 'ArrowDown';
+      if (!jointArrow && event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+      // 관절 목록의 ↑↓만 직접 처리합니다. 입력칸·다른 목록은 기본 동작을 유지합니다.
       const target = event.target;
-      if (target instanceof HTMLElement && (target.closest('input, textarea, select') || target.isContentEditable)) return;
+      if (target instanceof HTMLElement && (target.closest('input, textarea, select') || target.isContentEditable) &&
+        !(jointArrow && target.id === 'joint-select')) return;
       event.preventDefault();
-      if (!event.repeat) requestNavigate(event.key === 'ArrowLeft' ? -1 : 1);
+      if (event.repeat) return;
+      if (jointArrow) {
+        if (readyRef.current && !busyRef.current) editorRef.current?.moveJoint(event.key === 'ArrowUp' ? -1 : 1);
+      } else requestNavigate(event.key === 'ArrowLeft' ? -1 : 1);
     }
     function beforeUnload(event: BeforeUnloadEvent) {
       if (dirty) { event.preventDefault(); event.returnValue = ''; }
