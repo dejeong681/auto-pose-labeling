@@ -237,7 +237,7 @@ export default function EditorModal({ image, imageIndex, imageCount, onNavigate,
             {busy === 'save' ? '저장 중…' : dirty ? '저장 *' : '저장'}
           </button>
           <button id="reload-labels" type="button" disabled={disabled} onClick={() => void reload()}>다시 불러오기</button>
-          <button id="download-labels" type="button" disabled={disabled} onClick={() => void download()}>JSON 다운로드</button>
+          <button id="download-labels" type="button" disabled={disabled} onClick={() => void download()}>.json 다운로드</button>
           <button id="editor-close" type="button" aria-label="편집기 닫기" autoFocus onClick={requestClose}>닫기</button>
         </div>
       </header>
