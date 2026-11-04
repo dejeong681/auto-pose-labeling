@@ -1,0 +1,24 @@
+# 작업 데이터와 모델은 PC 폴더에 따로 보관
+data/
+models/
+
+# PC에 설치한 패키지와 기존 빌드 결과
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+.venv/
+venv/
+
+# Python 실행 중 생기는 캐시
+**/__pycache__/
+**/*.py[cod]
+
+# Git과 편집기 설정
+.git/
+.vscode/
+
+# 개인 환경 설정
+.env
+.env.*
+frontend/.env
+frontend/.env.*
