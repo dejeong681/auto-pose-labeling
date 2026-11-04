@@ -1,0 +1,13 @@
+name: auto-pose-labeling
+
+services:
+  web:
+    build: .
+    image: auto-pose-labeling:local
+
+    ports:
+      - "127.0.0.1:8080:8000"
+
+    volumes:
+      - ./data:/app/data
+      - ./models:/app/models:ro
