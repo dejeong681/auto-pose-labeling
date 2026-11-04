@@ -1,3 +1,4 @@
+//브랜치 수정확인작업
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
 import * as api from '../api';
 import { PoseEditor } from '../pose-editor';
