@@ -27,7 +27,6 @@ export default function EditorModal({ image, imageIndex, imageCount, onNavigate,
   const [savedPeople, setSavedPeople] = useState('[]');
   const [hasSavedTxt, setHasSavedTxt] = useState(false);
   const [labelLoadFailed, setLabelLoadFailed] = useState(false);
-  const [classValid, setClassValid] = useState(true);
   const [status, setStatus] = useState({ message: '', error: false });
   const [snapshot, setSnapshot] = useState<EditorSnapshot>({
     people: [], selectedPerson: 0, selectedJoint: -1, mode: 'point', zoom: 1,
@@ -132,17 +131,13 @@ export default function EditorModal({ image, imageIndex, imageCount, onNavigate,
     if (imageIndex < 0 || next < 0 || next >= imageCount) return;
     if (confirmDiscard()) onNavigate(direction);
   }
-  function canRun(checkClass = false) {
+  function canRun() {
     if (!readyRef.current || busyRef.current || !editorRef.current) return false;
-    if (checkClass && !classValid) {
-      message('클래스 번호는 0 이상의 정수로 입력하세요.', true);
-      return false;
-    }
     return true;
   }
   async function save() {
     // 읽지 못한 기존 파일을 빈 내용으로 덮어쓰지 않게 버튼과 Ctrl+S 모두에서 막습니다.
-    if (!canRun(true) || (labelLoadFailed && !dirty)) return;
+    if (!canRun() || (labelLoadFailed && !dirty)) return;
     setAction('save');
     try {
       const data = await api.saveLabels(image.filename, editorRef.current!.getPeople());
@@ -179,7 +174,7 @@ export default function EditorModal({ image, imageIndex, imageCount, onNavigate,
     finally { setAction(''); }
   }
   async function download() {
-    if (!canRun(true)) return;
+    if (!canRun()) return;
     setAction('download');
     try {
       await api.downloadJsonLabels(image.filename, editorRef.current!.getPeople());
@@ -270,8 +265,7 @@ export default function EditorModal({ image, imageIndex, imageCount, onNavigate,
             </span>}
           </div>
         </section>
-        <EditorTools editor={editorRef.current} snapshot={snapshot} disabled={disabled}
-          onError={(text) => message(text, true)} onClassValidity={setClassValid} />
+        <EditorTools editor={editorRef.current} snapshot={snapshot} disabled={disabled} />
       </div>
       <p id="editor-status" className={`editor-status${status.error ? ' error' : ''}`} role="status" aria-live="polite">{status.message}</p>
     </div>
