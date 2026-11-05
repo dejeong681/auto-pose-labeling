@@ -9,4 +9,5 @@ frontend/.vite/
 frontend/.env.local
 data/
 models/*.pt
+models/*.joblib
 AGENTS.md
