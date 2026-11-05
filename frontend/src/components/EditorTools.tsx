@@ -1,5 +1,5 @@
 //브랜치 수정확인작업222
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useLayoutEffect, useRef } from 'react';
 import { JOINT_NAMES, PoseEditor } from '../pose-editor';
 import type { EditorSnapshot } from '../types';
 
@@ -7,33 +7,20 @@ type Props = {
   editor: PoseEditor | null;
   snapshot: EditorSnapshot;
   disabled: boolean;
-  onError: (message: string) => void;
-  onClassValidity: (valid: boolean) => void;
 };
 
-export default function EditorTools({ editor, snapshot, disabled, onError, onClassValidity }: Props) {
+// 선택할 클래스 번호입니다. 새 클래스를 사용하면 이 배열에 번호를 추가하세요.
+const CLASS_IDS = [0, 1];
+
+export default function EditorTools({ editor, snapshot, disabled }: Props) {
   const person = snapshot.people[snapshot.selectedPerson];
-  const [classValue, setClassValue] = useState('0');
+  // 기존 라벨에 다른 번호가 있어도 현재 값을 잃지 않도록 목록에 함께 표시합니다.
+  const classIds = [...new Set([...CLASS_IDS, ...snapshot.people.map((item) => item.class_id)])].sort((a, b) => a - b);
   const jointSelectRef = useRef<HTMLSelectElement>(null);
   // React의 기본 선택 보정으로 첫 관절이 선택되지 않게, 선택이 없으면 모두 해제합니다.
   useLayoutEffect(() => {
     if (snapshot.selectedJoint < 0 && jointSelectRef.current) jointSelectRef.current.selectedIndex = -1;
   });
-  useEffect(() => {
-    setClassValue(String(person?.class_id ?? 0));
-    onClassValidity(true);
-  }, [person, onClassValidity]);
-
-  function applyClass(value = classValue) {
-    const number = Number(value);
-    if (!value || !Number.isSafeInteger(number) || number < 0) {
-      onClassValidity(false);
-      onError('클래스 번호는 0 이상의 정수로 입력하세요.');
-      return;
-    }
-    onClassValidity(true);
-    editor?.setClass(number);
-  }
 
   return <aside className="editor-tools" aria-label="수동 편집 도구">
     <fieldset id="edit-controls" disabled={disabled}>
@@ -43,19 +30,12 @@ export default function EditorTools({ editor, snapshot, disabled, onError, onCla
         {snapshot.people.length ? snapshot.people.map((item, index) =>
           <option key={index} value={index}>사람 {index + 1} · 클래스 {item.class_id}</option>) : <option value="">사람 없음</option>}
       </select>
-      <div className="class-row">
-        <label htmlFor="class-id">클래스 번호</label>
-        <input id="class-id" type="number" min="0" step="1" value={classValue} disabled={!person}
-          onChange={(event) => {
-            const value = event.target.value;
-            setClassValue(value);
-            const valid = Boolean(value) && Number.isSafeInteger(Number(value)) && Number(value) >= 0;
-            onClassValidity(valid);
-            // 유효한 번호는 즉시 반영하므로 Ctrl+S를 바로 눌러도 빠지지 않습니다.
-            if (valid) editor?.setClass(Number(value));
-          }} onBlur={() => applyClass()} />
-        <button id="apply-class"  disabled={!person} onClick={() => applyClass()}>적용</button>
-      </div>
+      <label htmlFor="class-id">클래스 번호</label>
+      <select id="class-id" value={person?.class_id ?? ''} disabled={!person}
+        onChange={(event) => editor?.setClass(Number(event.target.value))}>
+        {!person && <option value="">사람 없음</option>}
+        {classIds.map((id) => <option key={id} value={id}>{id}</option>)}
+      </select>
       <div className="tool-buttons">
         <button id="add-person"  onClick={() => editor?.startBox('add')}>사람 추가</button>
         <button id="replace-box"  disabled={!person} onClick={() => editor?.startBox('replace')}>박스 다시 그리기</button>
