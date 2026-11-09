@@ -10,7 +10,6 @@ export default defineConfig(({ mode }) => {
       host: '127.0.0.1',
       port: 5173,
       strictPort: true,
-      // 브라우저는 같은 주소로 요청하고 Vite가 FastAPI에 전달합니다.
       proxy: {
         '/api': { target: backend, changeOrigin: true },
         '/images': { target: backend, changeOrigin: true },
