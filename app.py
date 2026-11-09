@@ -1,5 +1,4 @@
 """이미지 업로드 → 포즈 자동 라벨링 → 수동 편집 → TXT 저장/JSON 다운로드.
-
 설치: python -m pip install -r requirements.txt
 실행: python -m uvicorn app:app --reload
 화면 개발: frontend 폴더에서 npm install 후 npm run dev (http://127.0.0.1:5173)
