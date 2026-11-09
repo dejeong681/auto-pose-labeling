@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
 import * as api from '../api';
 import { PoseEditor } from '../pose-editor';
-import type { EditorSnapshot, ImageInfo, PersonLabel, SavedLabels } from '../types';
+import type { EditorSnapshot, ImageInfo, SavedLabels } from '../types';
 import EditorTools from './EditorTools';
 
 type Props = {
@@ -9,11 +9,12 @@ type Props = {
   imageIndex: number;
   imageCount: number;
   onNavigate: (direction: -1 | 1) => void;
+  onSave: (labels: SavedLabels) => void;
   onClose: () => void;
 };
 type Busy = '' | 'load' | 'pose' | 'save' | 'reload' | 'download';
 
-export default function EditorModal({ image, imageIndex, imageCount, onNavigate, onClose }: Props) {
+export default function EditorModal({ image, imageIndex, imageCount, onNavigate, onSave, onClose }: Props) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const editorRef = useRef<PoseEditor | null>(null);
@@ -141,6 +142,7 @@ export default function EditorModal({ image, imageIndex, imageCount, onNavigate,
     try {
       const data = await api.saveLabels(image.filename, editorRef.current!.getPeople());
       acceptSaved(data, true);
+      onSave(data);
       message('TXT 라벨을 저장했습니다.');
     } catch (error) { message(error instanceof Error ? error.message : '저장에 실패했습니다.', true); }
     finally { setAction(''); }
@@ -162,11 +164,7 @@ export default function EditorModal({ image, imageIndex, imageCount, onNavigate,
     message('관절을 분석하고 있습니다.');
     try {
       const result = await api.estimatePose(image.filename);
-      const people: PersonLabel[] = result.people.map((person) => ({
-        class_id: 0, box: person.box,
-        keypoints: person.keypoints.map((point) => point.usable ?
-          { x: point.x, y: point.y, v: 2 } : { x: 0, y: 0, v: 0 }),
-      }));
+      const people = api.poseToLabels(result);
       editorRef.current!.setPeople(people);
       message(`사람 ${people.length}명. 관절 위치를 검수한 뒤 저장하세요.`);
     } catch (error) { message(error instanceof Error ? error.message : '추론에 실패했습니다.', true); }
