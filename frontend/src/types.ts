@@ -1,5 +1,6 @@
 // 서버 JSON과 편집기의 공통 형식입니다. 좌표는 이미지 전체 기준 0~1입니다.
-export type ImageInfo = { filename: string; url: string; skipped?: boolean };
+export type ImageLabelSummary = { class_ids: number[]; person_count: number };
+export type ImageInfo = { filename: string; url: string; skipped?: boolean } & Partial<ImageLabelSummary>;
 export type Visibility = 0 | 1 | 2;
 export type JointLabel = { x: number; y: number; v: Visibility };
 export type PersonLabel = {
@@ -7,7 +8,7 @@ export type PersonLabel = {
   box: [number, number, number, number];
   keypoints: JointLabel[];
 };
-export type SavedLabels = { filename: string; exists: boolean; needs_save: boolean; people: PersonLabel[] };
+export type SavedLabels = { filename: string; exists: boolean; needs_save: boolean; people: PersonLabel[]; skipped?: boolean };
 export type PoseResponse = {
   filename: string;
   people: {
