@@ -1,5 +1,6 @@
 """수동 라벨을 검사하고 YOLO 17관절 TXT를 읽고 씁니다."""
 
+from collections.abc import Sequence
 from math import isfinite
 
 from pydantic import BaseModel, Field, field_validator
@@ -11,10 +12,9 @@ class JointLabel(BaseModel):
     v: int = Field(ge=0, le=2, strict=True)
 
 
-class PersonLabel(BaseModel):
+class BoxLabel(BaseModel):
     class_id: int = Field(ge=0, strict=True)
     box: list[float] = Field(min_length=4, max_length=4)
-    keypoints: list[JointLabel] = Field(min_length=17, max_length=17)
 
     @field_validator("box")
     @classmethod
@@ -25,6 +25,10 @@ class PersonLabel(BaseModel):
         if min(cx - width / 2, cy - height / 2) < -1e-6 or max(cx + width / 2, cy + height / 2) > 1 + 1e-6:
             raise ValueError("박스가 이미지 범위를 벗어났습니다.")
         return values
+
+
+class PersonLabel(BoxLabel):
+    keypoints: list[JointLabel] = Field(min_length=17, max_length=17)
 
 
 class PoseLabels(BaseModel):
@@ -52,6 +56,23 @@ def to_yolo_txt(labels: PoseLabels) -> str:
                 fields.extend(["0", "0", "0"])
         lines.append(" ".join(fields))
     return "\n".join(lines) + ("\n" if lines else "")
+
+
+def to_bbox_txt(boxes: Sequence[BoxLabel]) -> str:
+    return "".join(" ".join(map(str, (item.class_id, *item.box))) + "\n" for item in boxes)
+
+
+def bbox_labels_from_txt(text: str) -> list[BoxLabel]:
+    """기존 박스·포즈 TXT에서 클래스와 박스 좌표만 검증해 가져옵니다."""
+    boxes = []
+    for line_number, line in enumerate(text.splitlines(), start=1):
+        fields = line.split()
+        if not fields:
+            continue
+        if len(fields) not in (5, 56):
+            raise ValueError(f"{line_number}번째 줄의 라벨 형식을 확인하세요.")
+        boxes.append(BoxLabel(class_id=int(fields[0]), box=[float(value) for value in fields[1:5]]))
+    return boxes
 
 
 def from_yolo_txt(text: str) -> PoseLabels:
