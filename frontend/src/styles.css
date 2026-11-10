@@ -87,3 +87,34 @@ h2 { margin-top: 0; font-size: 17px; }
   .preview { --preview-max-height: calc(100dvh - 290px); min-height: 180px; padding: 12px; }
   .editor-status { padding: 10px 16px; }
 }
+ .app-header {
+  display: flex;
+  align-items: center;
+  gap: 2rem;
+  margin-bottom: 1.5rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid #d9dee8;
+}
+
+.app-brand {
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.app-navigation {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.app-navigation a {
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.4rem;
+  color: inherit;
+  text-decoration: none;
+}
+
+.app-navigation a:hover,
+.app-navigation a.active {
+  background: #e8eefc;
+  color: #2455b8;
+}
