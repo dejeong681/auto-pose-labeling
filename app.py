@@ -1,14 +1,15 @@
+
 """이미지 업로드 → 포즈 자동 라벨링 → 수동 편집 → TXT 저장/JSON 다운로드.
+
+
 설치: python -m pip install -r requirements.txt
 실행: python -m uvicorn app:app --reload
-화면 개발: frontend 폴더에서 npm install 후 npm run dev (http://127.0.0.1:5173)
-빌드 화면: frontend 폴더에서 npm run build 후 http://127.0.0.1:8000
+접속: http://127.0.0.1:8000
 """
 
 from collections import Counter
 from functools import lru_cache
 from io import BytesIO
-import json
 import logging
 from math import isfinite
 from pathlib import Path, PureWindowsPath
@@ -17,7 +18,7 @@ from tempfile import NamedTemporaryFile, mkdtemp
 from urllib.parse import quote
 
 from fastapi import FastAPI, HTTPException, UploadFile
-from fastapi.responses import FileResponse, JSONResponse, Response
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from PIL import Image, ImageOps, UnidentifiedImageError
 from pydantic import BaseModel, ValidationError
@@ -25,14 +26,16 @@ from pydantic import BaseModel, ValidationError
 from pose_labels import PoseLabels, bbox_labels_from_txt, from_yolo_txt, normalized_labels, to_bbox_txt, to_yolo_txt
 
 BASE_DIR = Path(__file__).resolve().parent
-FRONTEND_DIST = BASE_DIR / "frontend" / "dist"
+STATIC_DIR = BASE_DIR / "static"
 IMAGE_DIR = BASE_DIR / "data" / "images"
+
 LABEL_DIR = BASE_DIR / "data" / "labels"
 BBOX_LABEL_DIR = BASE_DIR / "data" / "bbox_labels"
+
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024  # 한 장당 10MB
 IMAGE_FORMATS = {"JPEG": (".jpg", ".jpeg"), "PNG": (".png",), "WEBP": (".webp",), "BMP": (".bmp",)}
 IMAGE_EXTENSIONS = {suffix for suffixes in IMAGE_FORMATS.values() for suffix in suffixes}
-MODEL_PATH = BASE_DIR / "models" / "yolo11s-pose.pt"
+MODEL_PATH = BASE_DIR / "models" / "yolo11n-pose.pt"
 DET_CONF = 0.25
 KP_CONF = 0.5  # 관절 표시 기준인 임시값입니다. 실제 결과로 조정하세요.
 IMGSZ = 640
@@ -45,8 +48,7 @@ LABEL_SAVE_LOCK = Lock()  # 이미지와 라벨을 저장하거나 삭제하는 
 
 IMAGE_DIR.mkdir(parents=True, exist_ok=True)
 app = FastAPI(title="Auto Pose Labeling")
-# 빌드하기 전에도 API 서버를 실행할 수 있도록 check_dir=False로 둡니다.
-app.mount("/assets", StaticFiles(directory=FRONTEND_DIST / "assets", check_dir=False), name="assets")
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 app.mount("/images", StaticFiles(directory=IMAGE_DIR), name="images")
 
 
@@ -69,11 +71,7 @@ def validate_filename(filename: str | None) -> str:
 
 @app.get("/")
 def home():
-    """Vite가 빌드한 React 화면을 제공합니다. 개발 중에는 5173 포트로 접속합니다."""
-    path = FRONTEND_DIST / "index.html"
-    if not path.is_file():
-        raise HTTPException(503, "React 화면이 빌드되지 않았습니다. frontend에서 npm run build를 실행하거나 개발 서버(5173)에 접속하세요.")
-    return FileResponse(path)
+    return FileResponse(STATIC_DIR / "index.html")
 
 
 @app.get("/api/images")
@@ -201,11 +199,6 @@ def load_pose_model(model_path: str):
         from ultralytics import YOLO
     except ImportError:
         raise HTTPException(503, "포즈 추론 패키지를 설치하세요. requirements.txt를 확인하세요.")
-    except OSError as error:
-        if getattr(error, "winerror", None) == 4551:
-            logging.exception("Windows 정책으로 PyTorch 실행이 차단되었습니다.")
-            raise HTTPException(503, "Windows 애플리케이션 제어 정책이 PyTorch 실행을 차단했습니다.")
-        raise
     model = YOLO(model_path)
     if model.task != "pose":
         raise HTTPException(400, "COCO 17관절 포즈 모델을 지정하세요.")
@@ -262,6 +255,7 @@ def estimate_pose(filename: str):
     except Exception:
         logging.exception("포즈 추론 실패: %s", filename)
         raise HTTPException(500, "포즈 추론에 실패했습니다. 서버 터미널을 확인하세요.")
+
 
 
 def label_path_for(filename: str) -> Path:
@@ -444,3 +438,4 @@ def export_labels(filename: str, labels: PoseLabels):
     download_name = quote(Path(filename).stem + ".json", safe="")
     return Response(json.dumps(document, ensure_ascii=False, allow_nan=False, indent=2), media_type="application/json",
                     headers={"Content-Disposition": f"attachment; filename*=UTF-8''{download_name}"})
+
